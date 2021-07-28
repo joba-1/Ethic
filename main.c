@@ -1,19 +1,23 @@
 #include <arpa/inet.h>
-#include <linux/if_ether.h>
+#include <ctype.h>
 #include <linux/if.h>
+#include <linux/if_ether.h>
+#include <malloc.h>
 #include <netpacket/packet.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <sys/ioctl.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+#define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
 
 typedef struct options {
   bool receive;        // start receiver child
   bool send;           // send frame(s)
+  bool verbose;        // print send parameters or received payload 
   uint32_t count;      // number of frames to send
   char name[IFNAMSIZ]; // sender interface
   uint8_t mac[6];      // receiver mac
@@ -125,6 +129,114 @@ bool sendData(char *name, uint16_t type, uint8_t *dst_mac, uint8_t *data, size_t
   return sendFrame(sock, iface, frame, size, count);
 }
 
+// Prepare a socket for receiving frames on a given interface 
+// Returns true if successful
+// Prints errors to stderr
+bool prepareSocket(int sock, char *name) {
+  struct ifreq ifr = {0};
+  int s = 1;
+
+  strncpy(ifr.ifr_name, name, IFNAMSIZ - 1);
+
+  // Set interface to promiscuous mode.
+	// Todo needed?
+  if (ioctl(sock, SIOCGIFFLAGS, &ifr) < 0) {
+    perror("SIOCGIFFLAGS");
+    return false;
+  }
+  ifr.ifr_flags |= IFF_PROMISC;
+  if (ioctl(sock, SIOCSIFFLAGS, &ifr) < 0) {
+    perror("SIOCSIFFLAGS");
+    return false;
+  }
+
+	// Configure socket for reuse
+  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &s, sizeof(s)) < 0) {
+    perror("SO_REUSEADDR");
+    return false;
+  }
+
+  // Bind to interface (does this work?)
+  if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, name, IFNAMSIZ - 1) < 0) {
+    perror("SO_BINDTODEVICE");
+    return false;
+  }
+
+  return true;
+}
+
+// Print ethernet frame source, destination, payload size and payload, if not NULL
+void printFrame(uint8_t *src, uint8_t *dst, char *payload, size_t size) {
+
+  printf(MAC_FMT " -> " MAC_FMT " [%lu]",
+		src[0], src[1], src[2], src[3], src[4], src[5], 
+		dst[0], dst[1], dst[2], dst[3], dst[4], dst[5], size);
+
+  if (payload) {
+    printf(": '");
+    while (size--) {
+      if (isprint(*payload)) {
+        putchar(*(payload++));
+      } else {
+        putchar('.');
+        payload++;
+      }
+    }
+    printf("'\n");
+  } else {
+    putchar('\n');
+  }
+}
+
+// Listens on ethernet interface name for frames of given type
+// If count > 0 stops listening after count frames
+// Prints macs and if not quiet (-q) also the payload data
+// Returns true if successful
+// Prints errors to stderr
+bool receiveFrames(char *name, uint16_t type, bool verbose, size_t count) {
+  int sock;
+  if (!createSocket(type, &sock)) {
+    return false;
+  }
+
+  int iface;
+  uint8_t our_mac[ETH_ALEN];
+  if (!getInterface(sock, name, &iface, our_mac)) {
+    return false;
+  }
+
+	if (!prepareSocket(sock, name)) {
+		return false;
+	}
+
+	for(;;) {
+		static uint8_t frame[ETH_FRAME_LEN];
+		static uint8_t bcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
+		struct ethhdr *eh = (struct ethhdr *) frame;
+    ssize_t received = recvfrom (sock, frame, sizeof(frame), 0, NULL, NULL);
+    if (received <= 0) {
+      break;
+		}
+
+    // Frame not meant for us?
+		if (memcmp (eh->h_dest, our_mac, ETH_ALEN) != 0 &&
+				memcmp (eh->h_dest, bcast_mac, ETH_ALEN) != 0) {
+			continue;
+		}
+
+		char *payload = verbose ? (char *)frame + sizeof(*eh) : NULL;
+		printFrame(eh->h_source, eh->h_dest, payload, received - sizeof(*eh));
+
+		if (count && !--count) {
+			break;
+		}
+	}
+
+	close(sock);
+	return true;
+}
+
 // Parse commandline arguments to option_t values
 // Returns true if no syntax errors are found
 // Prints diagnostics to stderr
@@ -137,20 +249,27 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   opts->send = true;
   opts->size = strlen((char *)opts->data);
   opts->type = 0x88b5;
+  opts->verbose = true;
 
-  bool verbose = true;
-  unsigned m[6];
+  unsigned mac[6];
   char *endp;
   int ch;
-  while ((ch = getopt(argc, argv, "hvqc:d:m:i:t:")) != -1) {
+  while ((ch = getopt(argc, argv, "hvqrc:d:m:i:t:")) != -1) {
     switch (ch) {
     case 'h':
-      printf("syntax: %s -h | -v | [-q] [-c frame_count] [-d payload_data] "
-        "[-m destination_mac] [-i interface_name] [-t frame_type]\n", argv[0]);
+      printf("syntax: %s -h | -v | [-q] [-r] [-c frame_count] [-d payload_data] "
+        "[-m remote_mac] [-i interface_name] [-t frame_type]\n", argv[0]);
       exit(0);
     case 'v':
       printf("%s version 1.0 compiled " __DATE__ " " __TIME__ "\n", argv[0]);
       exit(0);
+    case 'q':
+      opts->verbose = false;
+      break;
+    case 'r':
+      opts->receive = true;
+      opts->send = false;
+      break;
     case 'c':
       opts->count = strtoul(optarg, &endp, 0);
       if (endp == optarg) {
@@ -167,13 +286,13 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
       opts->size = strlen((char *)opts->data);
       break;
     case 'm':
-      if (sscanf(optarg, "%x:%x:%x:%x:%x:%x", 
-        &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) != 6) {
+      if (sscanf(optarg, MAC_FMT, 
+        &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
         fprintf(stderr, "Wrong mac address '%s'.\n", optarg);
         return false;
       }
       for (size_t i=0; i<sizeof(opts->mac); i++) {
-        opts->mac[i] = m[i];
+        opts->mac[i] = mac[i];
       }
       break;
     case 'i':
@@ -198,12 +317,22 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
       return false;
     }
   }
-  if (verbose) {
-    printf("Send %u frame%s of type 0x%04x from %s to "
-           "%02x:%02x:%02x:%02x:%02x:%02x -> '%s'\n",
-           opts->count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
-           opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3], opts->mac[4],
-           opts->mac[5], opts->data);
+  if (opts->verbose) {
+		if (opts->send) {
+			printf("Send %u frame%s of type 0x%04x from %s to " MAC_FMT " -> '%s'\n",
+				opts->count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
+				opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3], opts->mac[4],
+				opts->mac[5], opts->data);
+		}
+		if (opts->receive) {
+			char count[20] = "";
+			if (opts->count) {
+				snprintf(count, sizeof(count), "%u ", opts->count);
+			}
+			printf("Receive %sframe%s of type 0x%04x on %s from " MAC_FMT "\n",
+				count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
+				opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3], opts->mac[4], opts->mac[5]);
+		}
   }
   return true;
 }
@@ -223,13 +352,15 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  if (opts.receive) {
-    // todo	startReceiver();
-  }
-
   if (opts.send) {
     if (!sendData(opts.name, opts.type, opts.mac, opts.data, opts.size, opts.count)) {
       return 2;
+    }
+  }
+	
+  if (opts.receive) {
+    if (!receiveFrames(opts.name, opts.type, opts.verbose, opts.count)) {
+      return 3;
     }
   }
 
