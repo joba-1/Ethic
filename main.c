@@ -251,6 +251,7 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   opts->type = 0x88b5;
   opts->verbose = true;
 
+  bool haveCount = false;
   unsigned mac[6];
   char *endp;
   int ch;
@@ -269,6 +270,9 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
     case 'r':
       opts->receive = true;
       opts->send = false;
+      if (!haveCount) {
+        opts->count = 0; // default for receive
+      }
       break;
     case 'c':
       opts->count = strtoul(optarg, &endp, 0);
@@ -276,6 +280,7 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
         fprintf(stderr, "Wrong repeat count '%s'.\n", optarg);
         return false;
       }
+      haveCount = true;
       break;
     case 'd':
       opts->data = (uint8_t *)strdup(optarg);
