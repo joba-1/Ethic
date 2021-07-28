@@ -142,11 +142,14 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   unsigned m[6];
   char *endp;
   int ch;
-  while ((ch = getopt(argc, argv, "hqc:d:m:i:t:")) != -1) {
+  while ((ch = getopt(argc, argv, "hvqc:d:m:i:t:")) != -1) {
     switch (ch) {
     case 'h':
-      printf("syntax: %s -h | [-q] [-c frame_count] [-d payload_data] "
+      printf("syntax: %s -h | -v | [-q] [-c frame_count] [-d payload_data] "
         "[-m destination_mac] [-i interface_name] [-t frame_type]\n", argv[0]);
+      exit(0);
+    case 'v':
+      printf("%s version 1.0 compiled " __DATE__ " " __TIME__ "\n", argv[0]);
       exit(0);
     case 'c':
       opts->count = strtoul(optarg, &endp, 0);
