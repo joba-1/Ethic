@@ -138,13 +138,14 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   opts->size = strlen((char *)opts->data);
   opts->type = 0x88b5;
 
+  bool verbose = true;
   unsigned m[6];
   char *endp;
   int ch;
-  while ((ch = getopt(argc, argv, "hc:d:m:i:t:")) != -1) {
+  while ((ch = getopt(argc, argv, "hqc:d:m:i:t:")) != -1) {
     switch (ch) {
     case 'h':
-      printf("syntax: %s -h | [-c frame_count] [-d payload_data] "
+      printf("syntax: %s -h | [-q] [-c frame_count] [-d payload_data] "
         "[-m destination_mac] [-i interface_name] [-t frame_type]\n", argv[0]);
       exit(0);
     case 'c':
@@ -193,6 +194,13 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
     default:
       return false;
     }
+  }
+  if (verbose) {
+    printf("Send %u frame%s of type 0x%04x from %s to "
+           "%02x:%02x:%02x:%02x:%02x:%02x -> '%s'\n",
+           opts->count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
+           opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3], opts->mac[4],
+           opts->mac[5], opts->data);
   }
   return true;
 }
