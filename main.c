@@ -132,9 +132,15 @@ bool sendData(char *name, uint16_t type, uint8_t *dst_mac, uint8_t *data, size_t
 // Prepare a socket for receiving frames on a given interface 
 // Returns true if successful
 // Prints errors to stderr
-bool prepareSocket(int sock, char *name) {
+bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac, char *name) {
   struct ifreq ifr = {0};
   int s = 1;
+  size_t len = strlen(name);
+
+  if (len >= IFNAMSIZ) {
+    fprintf(stderr, "interface name too long\n");
+    return false;
+  }
 
   strncpy(ifr.ifr_name, name, IFNAMSIZ - 1);
 
@@ -156,9 +162,20 @@ bool prepareSocket(int sock, char *name) {
     return false;
   }
 
-  // Bind to interface (does this work?)
-  if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, name, IFNAMSIZ - 1) < 0) {
-    perror("SO_BINDTODEVICE");
+  // doesn't work for raw sockets
+  // if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, name, len) < 0) {
+  //   perror("SO_BINDTODEVICE");
+  //   return false;
+  // }
+
+  struct sockaddr_ll sa = {0};
+  sa.sll_family = AF_PACKET;
+  sa.sll_ifindex = iface;
+  sa.sll_halen = ETH_ALEN;
+  memcpy(sa.sll_addr, mac, ETH_ALEN);
+  sa.sll_protocol = htons(type);
+  if (bind(sock, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    perror("bind()");
     return false;
   }
 
@@ -205,7 +222,7 @@ bool receiveFrames(char *name, uint16_t type, bool verbose, size_t count) {
     return false;
   }
 
-	if (!prepareSocket(sock, name)) {
+	if (!prepareSocket(sock, iface, type, our_mac, name)) {
 		return false;
 	}
 
@@ -214,7 +231,7 @@ bool receiveFrames(char *name, uint16_t type, bool verbose, size_t count) {
 		static uint8_t bcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 		struct ethhdr *eh = (struct ethhdr *) frame;
-    ssize_t received = recvfrom (sock, frame, sizeof(frame), 0, NULL, NULL);
+    ssize_t received = recvfrom(sock, frame, sizeof(frame), 0, NULL, NULL);
     if (received <= 0) {
       break;
 		}
