@@ -1,4 +1,4 @@
 CFLAGS += -Wall
 
-ethpkt: main.o
+ethic: main.o
 	$(CC) $(LDFLAGS) $< -o $@

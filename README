@@ -1,1 +1,3 @@
-send raw ethernet frames
+ethic: send and receive raw ethernet frames
+author: joachim.banzhaf@gmail.com
+licence: GPL V3
