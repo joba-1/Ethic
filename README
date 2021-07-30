@@ -1,3 +1,46 @@
-ethic: send and receive raw ethernet frames
-author: joachim.banzhaf@gmail.com
-licence: GPL V3
+Ethic 
+=====
+
+Ethernet Interface Communication: send and receive raw ethernet frames.
+
+* author: joachim.banzhaf@gmail.com
+* licence: GPL V3
+
+To build this locally, just change to this directory and call `make`
+
+To build and install this for an OpenWRT target, follow this receipe.
+It uses OpenWRT cloned to jobawrt directory and builds an ipk package
+in a local feed at ~/openwrt-feed/net/ethic
+
+```
+# prepare the openwrt toolchain, e.g. here in jobawrt
+cd ~/git/jobawrt
+make toolchain/install
+
+# prepare feed and package
+mkdir -p ~/openwrt-feed/net/ethic
+
+# use the template Makefile in the openwrt folder
+vi ~/openwrt-feed/net/ethic/Makefile
+echo "src-link joba $HOME/openwrt-feed" >>feeds.conf
+./scripts/feeds update joba
+./scripts/feeds install -a -p joba
+
+# configure package as module or builtin to a firmware
+make menuconfig
+
+# compile the app
+make package/ethic/compile
+
+# check the results
+ls -la bin/packages/aarch64_cortex-a53/joba/
+
+# install the app to a running target ax1
+scp bin/packages/aarch64_cortex-a53/joba/ethic_1.0-1_aarch64_cortex-a53.ipk ax1:/tmp
+ssh ax1 ipkg install /tmp/ethic_1.0-1_aarch64_cortex-a53.ipk
+
+# see it running
+ssh ax1 ethic -h
+```
+
+if this is to sparse, checkout https://openwrt.org/docs/guide-developer/helloworld/start
