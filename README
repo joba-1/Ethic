@@ -8,8 +8,8 @@ Ethernet Interface Communication: send and receive raw ethernet frames.
 
 To build this locally, just change to this directory and call `make`
 
-To build and install this for an OpenWRT target, follow this receipe.
-It uses OpenWRT cloned to jobawrt directory and builds an ipk package
+To build and install ethic for an OpenWRT target, follow this receipe.
+It uses OpenWRT cloned to a jobawrt directory and builds an ipk package
 in a local feed at ~/openwrt-feed/net/ethic
 
 ```
@@ -43,4 +43,4 @@ ssh ax1 ipkg install /tmp/ethic_1.0-1_aarch64_cortex-a53.ipk
 ssh ax1 ethic -h
 ```
 
-if this is to sparse, checkout https://openwrt.org/docs/guide-developer/helloworld/start
+if this receipe is too sparse, check out https://openwrt.org/docs/guide-developer/helloworld/start
