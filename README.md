@@ -1,23 +1,23 @@
-Ethic 
-=====
+# Ethic 
 
 Ethernet Interface Communication: send and receive raw ethernet frames.
 
-* author: joachim.banzhaf@gmail.com
-* licence: GPL V3
+* Author: joachim.banzhaf@gmail.com
+* Licence: GPL V3
 
 To build this locally, just change to this directory and call `make`
+or `gcc -Wall -o ethic main.c`
 
 To build and install ethic for an OpenWRT target, follow this receipe.
 It uses OpenWRT cloned to a jobawrt directory and builds an ipk package
-in a local feed at ~/openwrt-feed/net/ethic
+in a local feed joba at ~/openwrt-feed/net/ethic. Adapt it as needed.
 
 ```
-# prepare the openwrt toolchain, e.g. here in jobawrt
+# prepare the openwrt toolchain, e.g. here in directory jobawrt
 cd ~/git/jobawrt
 make toolchain/install
 
-# prepare feed and package
+# prepare local feed joba with package net/ethic
 mkdir -p ~/openwrt-feed/net/ethic
 
 # use the template Makefile in the openwrt folder
@@ -29,17 +29,17 @@ echo "src-link joba $HOME/openwrt-feed" >>feeds.conf
 # configure package as module or builtin to a firmware
 make menuconfig
 
-# compile the app
+# compile the app package separately from the rest of the firmware
 make package/ethic/compile
 
 # check the results
-ls -la bin/packages/aarch64_cortex-a53/joba/
+ls -la bin/packages/*/joba/
 
-# install the app to a running target ax1
-scp bin/packages/aarch64_cortex-a53/joba/ethic_1.0-1_aarch64_cortex-a53.ipk ax1:/tmp
-ssh ax1 ipkg install /tmp/ethic_1.0-1_aarch64_cortex-a53.ipk
+# install the app to a running target with hostname ax1
+scp bin/packages/*/joba/ethic_*.ipk ax1:/tmp
+ssh ax1 ipkg install /tmp/ethic_*.ipk
 
-# see it running
+# see it running on target ax1
 ssh ax1 ethic -h
 ```
 
