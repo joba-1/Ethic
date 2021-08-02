@@ -15,13 +15,13 @@
 #define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
 
 typedef struct options {
-  bool receive;        // start receiver child
+  bool receive;        // receive frame(s)
   bool send;           // send frame(s)
   bool verbose;        // print send parameters or received payload
-  uint32_t count;      // number of frames to send
+  uint32_t count;      // number of frames to process (0: unlimited)
   char name[IFNAMSIZ]; // sender interface
   uint8_t mac[6];      // receiver mac
-  uint16_t type;       // ethernet frame type (default 0x88b5)
+  uint16_t type;       // ethernet frame type (default 0x88b5: test)
   size_t size;         // frame data size
   uint8_t *data;       // pointer to frame data
 } options_t;
@@ -62,8 +62,9 @@ bool createSocket(uint16_t type, int *sock) {
 }
 
 // Creates an ethernet frame of given type with source mac, destination mac and
-// payload data Returns allocated buffer if successful, else NULL Prints errors
-// to stderr
+// payload data 
+// Returns allocated buffer if successful, else NULL 
+// Prints errors to stderr
 uint8_t *createFrame(uint16_t type, uint8_t *src_mac, uint8_t *dst_mac,
                      uint8_t *data, size_t size) {
   uint8_t *buffer = malloc(sizeof(struct ethhdr) + size);
@@ -82,7 +83,9 @@ uint8_t *createFrame(uint16_t type, uint8_t *src_mac, uint8_t *dst_mac,
 }
 
 // Sends an ethernet frame count times over a raw socket, closes the socket and
-// frees the frame memory Return true if successful Prints errors to stderr
+// frees the frame memory 
+// Return true if successful
+// Prints errors to stderr
 bool sendFrame(int sock, int iface, uint8_t *frame, size_t size, size_t count) {
   bool status = true;
   struct sockaddr_ll sa;
@@ -107,8 +110,9 @@ bool sendFrame(int sock, int iface, uint8_t *frame, size_t size, size_t count) {
 }
 
 // Send data of given size count times over ethernet interface name as raw
-// frames of given type to dst_mac Returns true if successful Prints errors to
-// stderr
+// frames of given type to dst_mac 
+// Returns true if successful
+// Prints errors to stderr
 bool sendData(char *name, uint16_t type, uint8_t *dst_mac, uint8_t *data,
               size_t size, size_t count) {
   int sock;
@@ -164,12 +168,13 @@ bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac,
     return false;
   }
 
-  // doesn't work for raw sockets
+  // Doesn't work for raw sockets
   // if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, name, len) < 0) {
   //   perror("SO_BINDTODEVICE");
   //   return false;
   // }
 
+  // Maybe doesn't work either (bind not tested)
   struct sockaddr_ll sa = {0};
   sa.sll_family = AF_PACKET;
   sa.sll_ifindex = iface;
@@ -184,8 +189,7 @@ bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac,
   return true;
 }
 
-// Print ethernet frame source, destination, payload size and payload, if not
-// NULL
+// Print ethernet frame source, destination, payload size and payload, if not NULL
 void printFrame(uint8_t *src, uint8_t *dst, char *payload, size_t size) {
 
   printf(MAC_FMT " -> " MAC_FMT " [%lu]", src[0], src[1], src[2], src[3],
