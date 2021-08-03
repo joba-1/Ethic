@@ -16,18 +16,18 @@
 #define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
 
 typedef struct options {
-  bool receive;        // start receiver child
+  bool receive;        // receive frame(s)
   bool send;           // send frame(s)
-  bool verbose;        // print send parameters or received payload 
-  uint32_t count;      // number of frames to send
+  bool verbose;        // print send parameters or received payload
+  uint32_t count;      // number of frames to process (0: unlimited)
   char name[IFNAMSIZ]; // sender interface
   uint8_t mac[6];      // receiver mac
-  uint16_t type;       // ethernet frame type (default 0x88b5)
+  uint16_t type;       // ethernet frame type (default 0x88b5: test)
   size_t size;         // frame data size
   uint8_t *data;       // pointer to frame data
 } options_t;
 
-// Get interface number and mac from the interface name. 
+// Get interface number and mac from the interface name.
 // Return true if successful
 // Prints errors to stderr
 bool getInterface(int sock, char *name, int *index, uint8_t *mac) {
@@ -62,10 +62,12 @@ bool createSocket(uint16_t type, int *sock) {
   return true;
 }
 
-// Creates an ethernet frame of given type with source mac, destination mac and payload data
-// Returns allocated buffer if successful, else NULL
+// Creates an ethernet frame of given type with source mac, destination mac and
+// payload data 
+// Returns allocated buffer if successful, else NULL 
 // Prints errors to stderr
-uint8_t *createFrame(uint16_t type, uint8_t *src_mac, uint8_t *dst_mac, uint8_t *data, size_t size) {
+uint8_t *createFrame(uint16_t type, uint8_t *src_mac, uint8_t *dst_mac,
+                     uint8_t *data, size_t size) {
   uint8_t *buffer = malloc(sizeof(struct ethhdr) + size);
   if (buffer) {
     struct ethhdr *eh = (struct ethhdr *)buffer;
@@ -73,8 +75,7 @@ uint8_t *createFrame(uint16_t type, uint8_t *src_mac, uint8_t *dst_mac, uint8_t 
     memcpy(eh->h_dest, dst_mac, ETH_ALEN);
     eh->h_proto = htons(type);
     memcpy(buffer + sizeof(struct ethhdr), data, size);
-  }
-  else {
+  } else {
     char msg[30];
     snprintf(msg, sizeof(msg), "%s(%lu)", "createFrame", size);
     perror(msg);
@@ -82,7 +83,8 @@ uint8_t *createFrame(uint16_t type, uint8_t *src_mac, uint8_t *dst_mac, uint8_t 
   return buffer;
 }
 
-// Sends an ethernet frame count times over a raw socket, closes the socket and frees the frame memory
+// Sends an ethernet frame count times over a raw socket, closes the socket and
+// frees the frame memory 
 // Return true if successful
 // Prints errors to stderr
 bool sendFrame(int sock, int iface, uint8_t *frame, size_t size, size_t count) {
@@ -96,7 +98,8 @@ bool sendFrame(int sock, int iface, uint8_t *frame, size_t size, size_t count) {
   size += sizeof(struct ethhdr);
 
   while (status && count--) {
-    if (size != sendto(sock, frame, size, 0, (struct sockaddr *)&sa, sizeof(sa))) {
+    if (size !=
+        sendto(sock, frame, size, 0, (struct sockaddr *)&sa, sizeof(sa))) {
       perror("sendto()");
       status = false;
     }
@@ -107,15 +110,17 @@ bool sendFrame(int sock, int iface, uint8_t *frame, size_t size, size_t count) {
   return status;
 }
 
-// Send data of given size count times over ethernet interface name as raw frames of given type to dst_mac
+// Send data of given size count times over ethernet interface name as raw
+// frames of given type to dst_mac 
 // Returns true if successful
 // Prints errors to stderr
-bool sendData(char *name, uint16_t type, uint8_t *dst_mac, uint8_t *data, size_t size, size_t count) {
+bool sendData(char *name, uint16_t type, uint8_t *dst_mac, uint8_t *data,
+              size_t size, size_t count) {
   int sock;
   if (!createSocket(type, &sock)) {
     return false;
   }
-  
+
   int iface;
   uint8_t src_mac[ETH_ALEN];
   if (!getInterface(sock, name, &iface, src_mac)) {
@@ -130,10 +135,11 @@ bool sendData(char *name, uint16_t type, uint8_t *dst_mac, uint8_t *data, size_t
   return sendFrame(sock, iface, frame, size, count);
 }
 
-// Prepare a socket for receiving frames on a given interface 
+// Prepare a socket for receiving frames on a given interface
 // Returns true if successful
 // Prints errors to stderr
-bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac, char *name) {
+bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac,
+                   char *name) {
   struct ifreq ifr = {0};
   int s = 1;
   size_t len = strlen(name);
@@ -146,7 +152,7 @@ bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac, char *name)
   strncpy(ifr.ifr_name, name, IFNAMSIZ - 1);
 
   // Set interface to promiscuous mode.
-	// Todo needed?
+  // Todo needed?
   if (ioctl(sock, SIOCGIFFLAGS, &ifr) < 0) {
     perror("SIOCGIFFLAGS");
     return false;
@@ -157,18 +163,19 @@ bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac, char *name)
     return false;
   }
 
-	// Configure socket for reuse
+  // Configure socket for reuse
   if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &s, sizeof(s)) < 0) {
     perror("SO_REUSEADDR");
     return false;
   }
 
-  // doesn't work for raw sockets
+  // Doesn't work for raw sockets
   // if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, name, len) < 0) {
   //   perror("SO_BINDTODEVICE");
   //   return false;
   // }
 
+  // Maybe doesn't work either (bind not tested)
   struct sockaddr_ll sa = {0};
   sa.sll_family = AF_PACKET;
   sa.sll_ifindex = iface;
@@ -186,9 +193,8 @@ bool prepareSocket(int sock, int iface, uint16_t type, uint8_t *mac, char *name)
 // Print ethernet frame source, destination, payload size and payload, if not NULL
 void printFrame(uint8_t *src, uint8_t *dst, char *payload, size_t size) {
 
-  printf(MAC_FMT " -> " MAC_FMT " [%lu]",
-		src[0], src[1], src[2], src[3], src[4], src[5], 
-		dst[0], dst[1], dst[2], dst[3], dst[4], dst[5], size);
+  printf(MAC_FMT " -> " MAC_FMT " [%lu]", src[0], src[1], src[2], src[3],
+         src[4], src[5], dst[0], dst[1], dst[2], dst[3], dst[4], dst[5], size);
 
   if (payload) {
     printf(": '");
@@ -223,36 +229,36 @@ bool receiveFrames(char *name, uint16_t type, bool verbose, size_t count) {
     return false;
   }
 
-	if (!prepareSocket(sock, iface, type, our_mac, name)) {
-		return false;
-	}
+  if (!prepareSocket(sock, iface, type, our_mac, name)) {
+    return false;
+  }
 
-	for(;;) {
-		static uint8_t frame[ETH_FRAME_LEN];
-		static uint8_t bcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  for (;;) {
+    static uint8_t frame[ETH_FRAME_LEN];
+    static uint8_t bcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-		struct ethhdr *eh = (struct ethhdr *) frame;
+    struct ethhdr *eh = (struct ethhdr *)frame;
     ssize_t received = recvfrom(sock, frame, sizeof(frame), 0, NULL, NULL);
     if (received <= 0) {
       break;
-		}
+    }
 
     // Frame not meant for us?
-		if (memcmp (eh->h_dest, our_mac, ETH_ALEN) != 0 &&
-				memcmp (eh->h_dest, bcast_mac, ETH_ALEN) != 0) {
-			continue;
-		}
+    if (memcmp(eh->h_dest, our_mac, ETH_ALEN) != 0 &&
+        memcmp(eh->h_dest, bcast_mac, ETH_ALEN) != 0) {
+      continue;
+    }
 
-		char *payload = verbose ? (char *)frame + sizeof(*eh) : NULL;
-		printFrame(eh->h_source, eh->h_dest, payload, received - sizeof(*eh));
+    char *payload = verbose ? (char *)frame + sizeof(*eh) : NULL;
+    printFrame(eh->h_source, eh->h_dest, payload, received - sizeof(*eh));
 
-		if (count && !--count) {
-			break;
-		}
-	}
+    if (count && !--count) {
+      break;
+    }
+  }
 
-	close(sock);
-	return true;
+  close(sock);
+  return true;
 }
 
 // Parse commandline arguments to option_t values
@@ -278,8 +284,10 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   while ((ch = getopt(argc, argv, "hvqrc:d:m:i:t:")) != -1) {
     switch (ch) {
     case 'h':
-      printf("syntax: %s -h | -v | [-q] [-r] [-c frame_count] [-d payload_data] "
-        "[-m remote_mac] [-i interface_name] [-t frame_type]\n", argv[0]);
+      printf(
+          "syntax: %s -h | -v | [-q] [-r] [-c frame_count] [-d payload_data] "
+          "[-m remote_mac] [-i interface_name] [-t frame_type]\n",
+          argv[0]);
       exit(0);
     case 'v':
       printf("%s version 1.0 compiled " __DATE__ " " __TIME__ "\n", argv[0]);
@@ -311,12 +319,12 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
       opts->size = strlen((char *)opts->data);
       break;
     case 'm':
-      if (sscanf(optarg, MAC_FMT, 
-        &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
+      if (sscanf(optarg, MAC_FMT, &mac[0], &mac[1], &mac[2], &mac[3], &mac[4],
+                 &mac[5]) != 6) {
         fprintf(stderr, "Wrong mac address '%s'.\n", optarg);
         return false;
       }
-      for (size_t i=0; i<sizeof(opts->mac); i++) {
+      for (size_t i = 0; i < sizeof(opts->mac); i++) {
         opts->mac[i] = mac[i];
       }
       break;
@@ -333,8 +341,7 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
     case '?':
       if (optopt == 'c') {
         fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-      }
-      else {
+      } else {
         fprintf(stderr, "Unknown option `-%c'.\n", optopt);
       }
       return false;
@@ -354,21 +361,22 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   }
 
   if (opts->verbose) {
-		if (opts->send) {
-			printf("Send %u frame%s of type 0x%04x from %s to " MAC_FMT " -> '%s'\n",
-				opts->count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
-				opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3], opts->mac[4],
-				opts->mac[5], opts->data);
-		}
-		if (opts->receive) {
-			char count[20] = "";
-			if (opts->count) {
-				snprintf(count, sizeof(count), "%u ", opts->count);
-			}
-			printf("Receive %sframe%s of type 0x%04x on %s from " MAC_FMT "\n",
-				count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
-				opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3], opts->mac[4], opts->mac[5]);
-		}
+    if (opts->send) {
+      printf("Send %u frame%s of type 0x%04x from %s to " MAC_FMT " -> '%s'\n",
+             opts->count, (opts->count == 1) ? "" : "s", opts->type, opts->name,
+             opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3],
+             opts->mac[4], opts->mac[5], opts->data);
+    }
+    if (opts->receive) {
+      char count[20] = "";
+      if (opts->count) {
+        snprintf(count, sizeof(count), "%u ", opts->count);
+      }
+      printf("Receive %sframe%s of type 0x%04x on %s from " MAC_FMT "\n", count,
+             (opts->count == 1) ? "" : "s", opts->type, opts->name,
+             opts->mac[0], opts->mac[1], opts->mac[2], opts->mac[3],
+             opts->mac[4], opts->mac[5]);
+    }
   }
   return true;
 }
@@ -389,11 +397,12 @@ int main(int argc, char *argv[]) {
   }
 
   if (opts.send) {
-    if (!sendData(opts.name, opts.type, opts.mac, opts.data, opts.size, opts.count)) {
+    if (!sendData(opts.name, opts.type, opts.mac, opts.data, opts.size,
+                  opts.count)) {
       return 2;
     }
   }
-	
+
   if (opts.receive) {
     if (!receiveFrames(opts.name, opts.type, opts.verbose, opts.count)) {
       return 3;
