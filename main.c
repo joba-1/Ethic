@@ -273,7 +273,6 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
   strncpy(opts->name, "eth0", sizeof(opts->name));
   opts->receive = false;
   opts->send = true;
-  opts->size = strlen((char *)opts->data);
   opts->type = 0x88b5;
   opts->verbose = true;
 
@@ -316,7 +315,6 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
         fprintf(stderr, "Copy data '%s' failed.\n", optarg);
         return false;
       }
-      opts->size = strlen((char *)opts->data);
       break;
     case 'm':
       if (sscanf(optarg, MAC_FMT, &mac[0], &mac[1], &mac[2], &mac[3], &mac[4],
@@ -359,6 +357,8 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
     gethostname(&payload[9], sizeof(payload)-9);
     payload[sizeof(payload)-1] = '\0';
   }
+
+  opts->size = strlen((char *)opts->data);
 
   if (opts->verbose) {
     if (opts->send) {
