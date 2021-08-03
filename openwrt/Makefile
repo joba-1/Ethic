@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 # The name and version of your package are used to define the variable to point to the build directory of your package: $(PKG_BUILD_DIR)
 PKG_NAME:=ethic
 PKG_VERSION:=1.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 # Source settings (i.e. where to find the source codes)
 # This is a custom variable, used below
@@ -32,7 +32,7 @@ endef
 # The last command is necessary to ensure our preparation instructions remain compatible with the patching system.
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
-	cp $(SOURCE_DIR)/* $(PKG_BUILD_DIR)
+	cp -av $(SOURCE_DIR)/* $(PKG_BUILD_DIR)
 	$(Build/Patch)
 endef
 
