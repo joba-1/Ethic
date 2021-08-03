@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
 #define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
@@ -258,8 +259,10 @@ bool receiveFrames(char *name, uint16_t type, bool verbose, size_t count) {
 // Returns true if no syntax errors are found
 // Prints diagnostics to stderr
 bool parseArgs(options_t *opts, int argc, char *argv[]) {
+  static char payload[8 + 1 + 20 + 1] = "00:00:00 ";
+
   opts->count = 1;
-  opts->data = (uint8_t *)"hi";
+  opts->data = (uint8_t *)payload;
   memset(opts->mac, 0xff, sizeof(opts->mac));
   strncpy(opts->name, "eth0", sizeof(opts->name));
   opts->receive = false;
@@ -339,6 +342,17 @@ bool parseArgs(options_t *opts, int argc, char *argv[]) {
       return false;
     }
   }
+
+  // default payload is time and hostname
+  if (opts->data == (uint8_t *)payload) {
+    time_t t;
+    time(&t);
+    char *date = ctime(&t);
+    strncpy(payload, &date[11], 8);
+    gethostname(&payload[9], sizeof(payload)-9);
+    payload[sizeof(payload)-1] = '\0';
+  }
+
   if (opts->verbose) {
 		if (opts->send) {
 			printf("Send %u frame%s of type 0x%04x from %s to " MAC_FMT " -> '%s'\n",
